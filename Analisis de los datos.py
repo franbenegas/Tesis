@@ -12,6 +12,8 @@ import pandas as pd
 import numpy as np
 from scipy import signal
 from IPython import get_ipython
+from plyer import notification
+from tqdm import tqdm
 
 get_ipython().run_line_magic('matplotlib', 'qt5')
 
@@ -19,30 +21,8 @@ get_ipython().run_line_magic('matplotlib', 'qt5')
 directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\CaFF028-RoNe\2023-01-30-night'
 os.chdir(directory)
 
-#%% Organizacion de archivos 
-
-file_counts = {}
-
-for filename in os.listdir(directory):
-    if os.path.isfile(os.path.join(directory, filename)):
-        _, extension = os.path.splitext(filename)  
-        
-        Separate = _.split('-') # Me los separa en funcion del espaciador '-'
-        
-        # Esta parte me cuenta todos los archivos que tienen el mismo final, es decir el tiempo
-        if Separate[-1].lower() in file_counts:
-            file_counts[Separate[-1].lower()] += filename,
-        else:
-            file_counts[Separate[-1].lower()] = filename,
-txt,pressure,sound = file_counts['23.59.33']
-print(pressure)
-
-ps,pressure = wavfile.read(pressure)
-plt.plot(pressure)
 #%%
 Datos = pd.read_csv('adq-log.txt', delimiter='\t') 
-
-
 
 def datos_normalizados(indice):
     
@@ -71,17 +51,17 @@ def datos_normalizados(indice):
     pressure_norm = normalizar(pressure, mean_p, max_p)
     audio_norm = normalizar(audio, mean_s, max_s)
     
-    return audio_norm, pressure_norm, name
+    return audio_norm, pressure_norm, name, fs
 
 def plot_sound_vs_pressure(indice:int):
     
-    audio, pressure, name = datos_normalizados(indice)
+    audio, pressure, name, fs = datos_normalizados(indice)
     
     
     time = np.linspace(0, len(audio)/fs, len(audio))
     
     freq_audio, fft_result_audio = signal.periodogram(audio, fs)
-    freq_pressure, fft_result_pressure = signal.periodogram(pressure, ps)
+    freq_pressure, fft_result_pressure = signal.periodogram(pressure, fs)
     
     plt.figure(figsize=(14,7))
     plt.suptitle(f'{indice} = {name}')
@@ -119,78 +99,14 @@ def plot_sound_vs_pressure(indice:int):
     plt.grid(linestyle='dashed')
     
     plt.tight_layout()
-    print(f'{indice} = ', Sound)
+    print(f'{indice} = ', name)
     
-# def plot_sound_vs_pressure(indice:int,Datos:pd):
-    
-#     Pressure = Datos.loc[indice,'pressure_fname']
-#     Sound = Datos.loc[indice,'sound_fname']
 
-#     fs,audio = wavfile.read(Sound)
-#     ps,pressure = wavfile.read(Pressure)
-    
-#     time = np.linspace(0, len(audio)/fs, len(audio))
-    
-#     freq_audio, fft_result_audio = signal.periodogram(audio, fs)
-#     freq_pressure, fft_result_pressure = signal.periodogram(pressure, ps)
-
-#     frequencies_audio, times_audio, spectrogram_audio = signal.spectrogram(audio, fs)
-#     frequencies_pressure, times_pressure, spectrogram_pressure = signal.spectrogram(pressure, ps)
-
-
-#     plt.figure(figsize=(14,7))
-#     plt.suptitle(f'Indice = {indice}')
-    
-#     plt.subplot(3,4,(1,2))
-#     plt.title('Sound')
-#     plt.plot(time, audio)
-#     plt.xlabel('Time [sec]')
-    
-#     plt.subplot(3,4,(3,4))
-#     plt.title('Pressure')
-#     plt.plot(time, pressure)
-#     plt.xlabel('Time [sec]')
-    
-#     # Plot PSD of audio signal
-#     plt.subplot(3, 4, (5,6))
-#     plt.plot(freq_audio[1:], fft_result_audio[1:])
-#     plt.title('fft Audio')
-#     plt.xlim(0,500)
-#     plt.xlabel('Frequency [Hz]')
-#     plt.ylabel('Power')
-
-#     # Plot PSD of pressure signal
-#     plt.subplot(3, 4, (7,8))
-#     plt.plot(freq_pressure[1:], fft_result_pressure[1:])
-#     plt.title('fft Pressure')
-#     plt.xlim(0,10)
-#     plt.xlabel('Frequency [Hz]')
-#     plt.ylabel('Power')
-    
-#     # Plot spectrogram of audio signal
-#     plt.subplot(3, 4, (9,10))
-#     plt.pcolormesh(times_audio, frequencies_audio, np.log(spectrogram_audio))
-#     plt.colorbar(label='Log Power')
-#     plt.title('Spectrogram of Audio')
-#     plt.ylabel('Frequency [Hz]')
-#     plt.xlabel('Time [sec]')
-
-#     # Plot spectrogram of pressure signal
-#     plt.subplot(3, 4, (11,12))
-#     plt.pcolormesh(times_pressure, frequencies_pressure, np.log(spectrogram_pressure))
-#     plt.colorbar(label='Log Power')
-#     plt.title('Spectrogram of Pressure')
-#     plt.ylabel('Frequency [Hz]')
-#     plt.xlabel('Time [sec]')
-
-#     plt.tight_layout()
-#     print(f'{indice} = ', Sound)
-    
     
 #%%
 # plt.close('all')   
  
-plot_sound_vs_pressure(347, Datos)
+plot_sound_vs_pressure(347)
 #%% Grafico de Maximos y minimos
 
 plt.close('all')
@@ -315,55 +231,80 @@ plt.tight_layout()
 
 FWH_sound = []
 FWH_pressure = []
-
-for indice in Valores_comunes_zig_zag:
+Desviacion = []
+with tqdm(total = len(Zig_Zag_Sound)) as pbar_h:
+    for indice in Zig_Zag_Sound:#Valores_comunes_zig_zag:
+        
+        # Pressure = Datos.loc[indice,'pressure_fname']
+        # Sound = Datos.loc[indice,'sound_fname']
     
-    # Pressure = Datos.loc[indice,'pressure_fname']
-    # Sound = Datos.loc[indice,'sound_fname']
-
-    # fs,audio = wavfile.read(Sound)
-    # ps,pressure = wavfile.read(Pressure)
-    fs = 44150
-    audio, pressure = datos_normalizados(indice)
-
-    time = np.linspace(0, len(audio)/fs, len(audio))
-
-    sound_max = max(audio)
-    pressure_max = max(pressure)
-
-    Indices_sound_FWH = np.where(audio >= sound_max/2)
-    Indices_pressure_FWH = np.where(pressure >= pressure_max/2)
-
-    FWH_sound.append(time[Indices_sound_FWH[0][-1]] - time[Indices_pressure_FWH[0][0]])
-    FWH_pressure.append(time[Indices_pressure_FWH[0][-1]] - time[Indices_pressure_FWH[0][0]])
+        # fs,audio = wavfile.read(Sound)
+        # ps,pressure = wavfile.read(Pressure)
+        audio, pressure, name, fs = datos_normalizados(indice)
+    
+        time = np.linspace(0, len(audio)/fs, len(audio))
+    
+        sound_max = max(audio)
+        # pressure_max = max(pressure)
+        std = np.std(audio)
+    
+        audio_std = np.where(audio >= 2*std)
+        indice_menor = audio_std[0][0]
+        indice_mayor = audio_std[0][-1]
+        
+    
+        Indices_sound_FWH = np.where(audio >= sound_max/2)
+        # Indices_pressure_FWH = np.where(pressure >= pressure_max/2)
+    
+        FWH_sound.append(time[Indices_sound_FWH[0][-1]] - time[Indices_sound_FWH[0][0]])
+        # FWH_pressure.append(time[Indices_pressure_FWH[0][-1]] - time[Indices_pressure_FWH[0][0]])
+        
+        Desviacion.append(time[indice_mayor]-time[indice_menor])
+        
+        pbar_h.update(1)
 
 # Los paso a array porque es mas facil trabajar con los mismos   
 FWH_sound = np.array(FWH_sound)
-FWH_pressure = np.array(FWH_pressure)
+Desviacion = np.array(Desviacion)
+# FWH_pressure = np.array(FWH_pressure)
 
 #Calculo las diferencias entre ambos
 
-Dif_FWH = FWH_pressure - FWH_sound
+# Dif_FWH = FWH_pressure - FWH_sound
+
+# Display a notification when the program finishes
+notification.notify(
+    title='Program Finished',
+    message='Your Python program has finished running.',
+    app_icon=None,  # e.g. 'C:\\icon_32x32.ico'
+    timeout=10,  # seconds
+)
+
 
 #%% Grafico de los ancho altura mitad
 
 plt.figure(figsize=(14,7))
-plt.subplot(2,2,(1,2))
+plt.subplot(211)
 plt.title('Anchos altura mitad')
-plt.plot(Valores_comunes_zig_zag,FWH_sound,'.',label = 'Sound')
-plt.plot(Valores_comunes_zig_zag,FWH_pressure,'.',label='Pressure')
-plt.hlines(y=20,xmin=0,xmax=Valores_comunes_zig_zag[-1],color = 'k',linestyle='dashed',label='Corte')
-plt.legend()
-plt.grid(linestyle='dashed')
+plt.hist(FWH_sound,edgecolor='k',align='mid')
+plt.hist(Desviacion,edgecolor='k')
+plt.xlabel('Time [sec]')
+plt.subplot(212)
+plt.plot(Zig_Zag_Sound,FWH_sound,'.',label = 'Sound')
+plt.plot(Zig_Zag_Sound,Desviacion,'.')
+# plt.plot(Valores_comunes_zig_zag,FWH_pressure,'.',label='Pressure')
+# plt.hlines(y=20,xmin=0,xmax=Valores_comunes_zig_zag[-1],color = 'k',linestyle='dashed',label='Corte')
+# plt.legend()
+# plt.grid(linestyle='dashed')
 plt.xlabel('Indice')
 plt.ylabel('Time [sec]')
 
-plt.subplot(2,2,(3,4))
-plt.plot(Valores_comunes_zig_zag,Dif_FWH,'.g',label = 'Diferencia de anchos')
-plt.grid(linestyle='dashed')
-plt.xlabel('Indice')
-plt.ylabel('Time [sec]')
-plt.legend()
+# plt.subplot(2,2,(3,4))
+# # plt.plot(Valores_comunes_zig_zag,Dif_FWH,'.g',label = 'Diferencia de anchos')
+# plt.grid(linestyle='dashed')
+# plt.xlabel('Indice')
+# plt.ylabel('Time [sec]')
+# plt.legend()
 
 #%% Busco los indices que me gustan
 
@@ -390,16 +331,7 @@ ax2.plot(Indices_grafico[0],Dif_FWH[Indices_grafico],'--g',alpha = 0.5)
 ax2.set_ylabel('Diferencia de ancho')
 
     
-
 #%%
-
-plt.close('all')
-for indice in Indices_reducidos[20:]:
-    plot_sound_vs_pressure(indice)
-
-#%%
-from tqdm import tqdm
-
 
 file_counts = []
 
@@ -414,9 +346,16 @@ with tqdm(total = len(file_counts)) as pbar_h:
         fs, audio = wavfile.read(file)
         
         freq_audio, fft_result_audio = signal.periodogram(audio, fs)
-        if  np.log(fft_result_audio[4990:5010].any())>5:
+        if  np.log(fft_result_audio[49900:5010].any())>5:
             hola.append(file)
             
         pbar_h.update(1)
-        
+    
+# Display a notification when the program finishes
+notification.notify(
+    title='Program Finished',
+    message='Your Python program has finished running.',
+    app_icon=None,  # e.g. 'C:\\icon_32x32.ico'
+    timeout=10,  # seconds
+)
 
