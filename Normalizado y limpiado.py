@@ -18,7 +18,7 @@ import pickle
 get_ipython().run_line_magic('matplotlib', 'qt5')
 
 
-directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\Dia\CaFF028-RoNe\2023-02-01-day\Aviones y pajaros'
+directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\Dia\CaFF909-NaRo\2023-02-13-day\Aviones'
 os.chdir(directory)
 #%%
 lugar = os.listdir(directory)
@@ -81,8 +81,8 @@ columnas = ['Nombre','Tiempo inicial normalizacion','Tiempo final normalizacion'
 Datos = pd.DataFrame(columns=columnas)
 
 #%%
-indice = 0
-ti,tf = 2,5
+indice = 9
+ti,tf = 27.81,29
 print(indice+1,len(Sonidos))
 audio, pressure, name, fs = datos_normalizados_2(indice, ti, tf)
 
@@ -156,7 +156,7 @@ plt.legend(fancybox=True, shadow=True)
 plt.tight_layout()
 
 #%% Aca saco los que me molestan
-sacar = [28,33]
+sacar = [31]
 picos_limpios = []
 
 for i in range(len(peaks_maximos)):

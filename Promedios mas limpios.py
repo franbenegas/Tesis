@@ -4,15 +4,10 @@ Created on Wed Jul 31 18:45:33 2024
 
 @author: beneg
 """
-
-
-
-
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import wavfile
-import pandas as pd
 from scipy.signal import find_peaks
 from tqdm import tqdm
 import pickle
@@ -23,15 +18,15 @@ from scipy.interpolate import interp1d
 import matplotlib.patches as mpatches
 
 #%%
-directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\Dia\CaFF028-RoNe'
+directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\Dia\CaFF073-RoVio'
 os.chdir(directory)
 
 carpetas = os.listdir(directory)
-pajaritos = '\Aviones y pajaros'
+pajaritos = '\Aviones\Aviones y pajaros'
 noches_1 = directory + '/' + carpetas[0] + pajaritos
-noches_2 = directory + '/' + carpetas[2] + pajaritos
-noches_3 = directory + '/' + carpetas[3] + pajaritos
-noches_4 = directory + '/' + carpetas[4] + pajaritos
+noches_2 = directory + '/' + carpetas[1] + pajaritos
+noches_3 = directory + '/' + carpetas[2] + pajaritos
+# noches_4 = directory + '/' + carpetas[4] + pajaritos
 
 #%%
 
@@ -43,6 +38,8 @@ def datos_normalizados_2(Sonidos,Presiones,indice, ti, tf):
     fs,audio = wavfile.read(Sound)
     fs,pressure = wavfile.read(Pressure)
    
+    audio = audio-np.mean(audio)
+    audio_norm = audio / np.max(audio)
     
     pressure = pressure-np.mean(pressure)
     pressure_norm = pressure / np.max(pressure)
@@ -52,15 +49,13 @@ def datos_normalizados_2(Sonidos,Presiones,indice, ti, tf):
       x_int = x[int(ti*fs):int(tf*fs)]
       return 2 * (x-np.min(x_int))/(np.max(x_int)-np.min(x_int)) - 1
         
-    audio = audio-np.mean(audio)
-    audio_norm = audio / np.max(audio)
     
     pressure_norm = norm11_interval(pressure_norm, ti, tf, fs)
     audio_norm = norm11_interval(audio_norm, ti, tf, fs)
 
     return audio_norm, pressure_norm, name, fs
 
-time = np.linspace(0, 1324503/44150, 1324503)
+# time = np.linspace(0, 1324503/44150, 1324503)
 
 def process_night_data(directories):
     """
@@ -89,6 +84,7 @@ def process_night_data(directories):
                 presiones.append(file)
             elif file[0] == 'D':
                 datos.append(file)
+            
 
         with open(datos[0], 'rb') as f:
             datos = pickle.load(f)
@@ -210,13 +206,13 @@ notification.notify(
     app_icon=None,  # e.g. 'C:\\icon_32x32.ico'
     timeout=10,  # seconds
 )
-time_series_list_noche_4 = process_night_data([noches_4])
-notification.notify(
-    title='Program Finished',
-    message='Your Python program has finished running.',
-    app_icon=None,  # e.g. 'C:\\icon_32x32.ico'
-    timeout=10,  # seconds
-)
+# time_series_list_noche_4 = process_night_data([noches_4])
+# notification.notify(
+#     title='Program Finished',
+#     message='Your Python program has finished running.',
+#     app_icon=None,  # e.g. 'C:\\icon_32x32.ico'
+#     timeout=10,  # seconds
+# )
 
 
 #%%
@@ -232,7 +228,7 @@ interpolated_data_noche_2 = interpolate_time_series_data(time_series_list_noche_
 interpolated_data_noche_3 = interpolate_time_series_data(time_series_list_noche_3, 44150, 300)
 
 
-interpolated_data_noche_4 = interpolate_time_series_data(time_series_list_noche_4, 44150, 300)
+# interpolated_data_noche_4 = interpolate_time_series_data(time_series_list_noche_4, 44150, 300)
 
 
 #%%
@@ -378,18 +374,18 @@ plt.tight_layout()
 ## Dia
 colors = ['k', 'C0']
 
-directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\Dia\CaFF028-RoNe'
+directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\Dia\CaFF909-NaRo'
 os.chdir(directory)
 
 carpetas = os.listdir(directory)
-pajaritos = '\Aviones y pajaros'
+pajaritos = '\Aviones'
 noches_1 = directory + '/' + carpetas[0] + pajaritos
-noches_2 = directory + '/' + carpetas[2] + pajaritos
-noches_3 = directory + '/' + carpetas[3] + pajaritos
-noches_4 = directory + '/' + carpetas[4] + pajaritos
+noches_2 = directory + '/' + carpetas[1] + pajaritos
+noches_3 = directory + '/' + carpetas[2] + pajaritos
+
 # time = np.linspace(0, 1324503/44150, 1324503)
 
-directories = [noches_1,noches_2,noches_3,noches_4]
+directories = [noches_1,noches_2,noches_3]
 time_series_list_total = process_night_data(directories)
 
 
@@ -403,7 +399,7 @@ average_rate_dia = interpolated_data_total['average_data_periodo']
 std_rate_dia = interpolated_data_total['std_data_periodo']
 
 fig, ax = plt.subplots(3, 1, figsize=(14, 7), sharex=True)
-plt.suptitle('RoNe dia')
+plt.suptitle('RoVio dia')
 
 ax[0].errorbar(interpolated_data_total['common_time_base_sound'], average_sonido_dia, std_sonido_dia, color=colors[0])
 ax[1].errorbar(interpolated_data_total['common_time_base_maximos'], average_maximos_dia, std_maximos_dia, color=colors[0])
@@ -412,7 +408,7 @@ ax[2].errorbar(interpolated_data_total['common_time_base_periodo'], average_rate
 
 
 ## Noche
-directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\CaFF028-RoNe'
+directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\CaFF909-NaRo'
 os.chdir(directory)
 
 carpetas = os.listdir(directory)
@@ -497,7 +493,7 @@ std_rate_noche_restricted = std_rate_noche[index_min_periodo:index_max_periodo+1
 non_nan_rate_noche_restricted = interpolated_data_noche['non_nan_periodo'][index_min_periodo:index_max_periodo+1]
 
 fig, ax = plt.subplots(3, 1, figsize=(14, 7), sharex=True)
-plt.suptitle('RoNe')
+plt.suptitle('RoVio')
 
 ax[0].errorbar(interpolated_data_total['common_time_base_sound'], average_sonido_dia, std_sonido_dia, color=colors[0])
 ax[1].errorbar(interpolated_data_total['common_time_base_maximos'], average_maximos_dia, std_maximos_dia, color=colors[0])
@@ -592,7 +588,7 @@ welch_metrics_periodo, degrees_of_freedon_periodo = calculate_welch_metric(inter
 #%%
 
 fig, ax = plt.subplots(3, 1, figsize=(14, 7), sharex=True)
-plt.suptitle('RoNe')
+plt.suptitle('NaRo')
 
 # Original errorbar plots
 ax[0].errorbar(interpolated_data_total['common_time_base_sound'], average_sonido_dia, std_sonido_dia, color='k', alpha=0.5)
@@ -642,3 +638,10 @@ plt.tight_layout()
 plt.figure()
 plt.plot(degrees_of_freedon_maximos)
 plt.plot(degrees_of_freedon_periodo)
+
+#%%
+
+
+
+
+

@@ -14,11 +14,11 @@ import numpy as np
 import sounddevice as sd
 
 # Define the directory and load your data
-directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\Dia'
+directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran'
 os.chdir(directory)
 carpetas = os.listdir(directory)
 
-pajaro = carpetas[1]
+pajaro = carpetas[2]
 
 if carpetas:
     carpetas_1 = os.listdir(os.path.join(directory, pajaro))
@@ -33,7 +33,8 @@ if carpetas:
         except FileNotFoundError:
             return f"The folder at {folder_path} does not exist."
 
-    folder_path = os.path.join(directory, pajaro, dia)
+    folder_path = os.path.join(directory, pajaro, dia,'Aviones')
+    # folder_path=r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\CaFF909-NaRo\2023-02-13-night\Aviones\Aviones y pajaros'
     files_starting_with_s = list_files_starting_with(folder_path, 's')
     files_starting_with_p = list_files_starting_with(folder_path, 'pre')
 
@@ -61,6 +62,7 @@ def draw_spectrogram(ax, spectrogram, dynamic_range=70):
 x, y = sound.xs(), sound.values.T
 xp, yp = pressure.xs(), pressure.values.T
 
+plt.close('all')
 # Plot the original sound data
 fig, ax = plt.subplots(3, 1, figsize=(14, 7),sharex=True)
 ax[0].set_title(f'{files_starting_with_s[0]}, file: {0 + 1}/{len(files_starting_with_s)}',fontsize=24)
@@ -142,12 +144,14 @@ class Index:
     def add(self, event):
         sonidos.append(files_starting_with_s[self.ind])
         presiones.append(files_starting_with_p[self.ind])
+        print(f'File saved {self.ind}')
     
     def onselect(self, vmin, vmax):
         # Update the selection range
         self.selection_start = vmin
         self.selection_end = vmax
-        print(f'Selected range: {round(self.selection_start,2)} - {round(self.selection_end,2)}')
+        
+        # print(f'Selected range: {round(self.selection_start,2)} - {round(self.selection_end,2)}')
 
 callback = Index()
 callback.sound = sound  # Initialize the sound in the callback class
@@ -191,8 +195,8 @@ plt.show()
 #%%
 from shutil import copyfile
 
-source_folder = os.path.join(directory, pajaro, dia) # La direccion de la carpeta Aviones
-destination_folder = os.path.join(source_folder, 'Aviones')
+source_folder = os.path.join(directory, pajaro, dia,'Aviones') # La direccion de la carpeta Aviones
+destination_folder = os.path.join(source_folder, 'Aviones y pajaros V2')
 
 if not os.path.exists(destination_folder):
     os.makedirs(destination_folder)
@@ -208,4 +212,4 @@ for src in sonidos:
     src_path = os.path.join(source_folder, src)
     dest_path = os.path.join(destination_folder, src)
     copyfile(src_path, dest_path) 
-#%%
+

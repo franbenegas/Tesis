@@ -16,7 +16,13 @@ from plyer import notification
 from scipy.interpolate import UnivariateSpline
 from scipy.interpolate import interp1d
 import matplotlib.patches as mpatches
+import json
 from scipy import stats
+from scipy.signal import butter, sosfiltfilt
+# Set the font to 'STIX'
+# plt.rcParams['font.family'] = 'STIXGeneral'
+# plt.rcParams['mathtext.fontset'] = 'stix'
+
 
 #%%
 
@@ -58,6 +64,28 @@ def process_night_data(directories):
         
     combined_time_series_list = []
 
+
+    
+    # Function to design a Butterworth bandpass filter
+    def butter_bandpass(lowcut, highcut, fs, order=5):
+        nyquist = 0.5 * fs  # Nyquist frequency
+        low = lowcut / nyquist  # Normalize lowcut frequency
+        high = highcut / nyquist  # Normalize highcut frequency
+        sos = butter(order, [low, high], btype='band', output='sos')  # Generate filter coefficients
+        return sos
+
+    # Apply the Butterworth bandpass filter to the data
+    def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+        sos = butter_bandpass(lowcut, highcut, fs, order=order)
+        filtered_signal = sosfiltfilt(sos, data)  # Filter the data
+        return filtered_signal
+    
+    # Define filter parameters
+    lowcut = 0.01  # Low cutoff frequency in Hz
+    highcut = 1500  # High cutoff frequency in Hz
+    fs = 44150  # Sampling frequency in Hz
+    order = 6  # Filter order
+
     for directory in directories:
         os.chdir(directory)
         files = os.listdir(directory)
@@ -71,28 +99,36 @@ def process_night_data(directories):
                 sonidos.append(file)
             elif file[0] == 'p':
                 presiones.append(file)
-            elif file[0] == 'D':
+            elif file[-4:] == 'json':
                 datos.append(file)
             
 
-        with open(datos[0], 'rb') as f:
-            datos = pickle.load(f)
-        
-        for indice in range(datos.shape[0]):
-            ti, tf = datos.loc[indice, 'Tiempo inicial normalizacion'], datos.loc[indice, 'Tiempo final normalizacion']
-            tiempo_inicial = datos.loc[indice, 'Tiempo inicial avion']
+        # Load the first JSON file
+        with open(datos[0], 'r', encoding='utf-8') as f:
+            datos = json.load(f)
+            
+        # Loop through the data and process each one (currently only processing the first two entries)
+        for indice in range(len(datos)):  # len(datos)
+            # Extract normalization times and plane time from the data
+            ti, tf = datos[indice]['Tiempo inicial normalizacion'], datos[indice]['Tiempo final normalizacion']
+            tiempo_inicial = datos[indice]['Tiempo inicial avion']
             
             audio, pressure, name, fs = datos_normalizados(sonidos, presiones, indice, ti, tf)
             
             time = np.linspace(0, len(pressure)/fs, len(pressure))
+            # Apply bandpass filter to audio signal
+            filtered_signal = butter_bandpass_filter(audio, lowcut, highcut, fs, order=order)
             
-            peaks_sonido, _ = find_peaks(audio, height=0, distance=int(fs*0.1), prominence=.001)
+            # Find peaks in the filtered signal
+            peaks_sonido, _ = find_peaks(filtered_signal, height=0, distance=int(fs * 0.1), prominence=.001)
+            # peaks_sonido, _ = find_peaks(audio, height=0, distance=int(fs*0.1), prominence=.001)
             # spline_amplitude_sound = UnivariateSpline(time[peaks_sonido], audio[peaks_sonido], s=0, k=3)
             
             # interpolado = spline_amplitude_sound(time)
             
             lugar_maximos = []
             maximos = np.loadtxt(f'{name}_maximos.txt')
+            # maximos = np.loadtxt(f'{name}_maximos_prueba.txt')
             for i in maximos:
                 lugar_maximos.append(int(i))
 
@@ -204,7 +240,7 @@ RoNe_noche = process_night_data(directories)
 # Interpolate the sound data from RoNe_noche using 'sonido' as the data key and 'time' as the time key
 # Specify a common time length of 44150 samples for sound
 time_sonido_RoNe_noche, interpolated_sonido_RoNe_noche = interpolate_single_data(
-    RoNe_noche, data_key='sonido', time_key='time', common_time_length=44150
+    RoNe_noche, data_key='sonido', time_key='time', common_time_length=300#44150
 )
 
 # Compute the average and standard deviation of the interpolated sound data
@@ -237,47 +273,65 @@ notification.notify(
 )
 
 #%% Grafico de todos los datos con su promedio
-fig, ax = plt.subplots(3, 1, figsize=(14, 7), sharex=True)
-ax[0].set_ylabel("Audio (arb. u.)")
-ax[1].set_ylabel("Pressure (arb. u.)")
-ax[2].set_ylabel("Rate (Hz)")
-ax[2].set_xlabel("Time (s)")
+fig, ax = plt.subplots(3, 1, figsize=(15, 9), sharex=True)
+# fig.suptitle('NaRo viejos V2')
+ax[0].set_ylabel("Audio (u. a.)", fontsize=20)
+ax[1].set_ylabel("Presion (u. a.)", fontsize=20)
+ax[2].set_ylabel("Rate (Hz)", fontsize=20)
+ax[2].set_xlabel("Tiempo (s)", fontsize=20)
+ax[0].tick_params(axis='both', labelsize=10)
+ax[1].tick_params(axis='both', labelsize=10)
+ax[2].tick_params(axis='both', labelsize=10)
 plt.tight_layout()
+
+colores1 = ["#0e2862","#152534","#1c2926","#b35f9f","#a99893"]
+colores2 = ['#2c2836', '#477cec', '#9f5793', '#718464', '#be6157']
 
 # Grafico de todas juntas 
 for i in range(len(RoNe_noche)):
     tiempo_sonido, sonido = RoNe_noche[i]['time'],RoNe_noche[i]['sonido']
-    ax[0].plot(tiempo_sonido,sonido,color='k',alpha=0.1,solid_capstyle='projecting')
+    ax[0].plot(tiempo_sonido,sonido,color='k',alpha=0.05,solid_capstyle='projecting')
 
 
     tiempo_presion, presion = RoNe_noche[i]['time maximos'],RoNe_noche[i]['presion']
-    ax[1].plot(tiempo_presion,presion,color='k',alpha=0.1,solid_capstyle='projecting')
+    ax[1].plot(tiempo_presion,presion,color='k',alpha=0.05,solid_capstyle='projecting')
 
 
     timepo_rate, rate = RoNe_noche[i]['time rate'],RoNe_noche[i]['rate']
-    ax[2].plot(timepo_rate,rate,color='k',alpha=0.1,solid_capstyle='projecting')
+    ax[2].plot(timepo_rate,rate,color='k',alpha=0.05,solid_capstyle='projecting')
     
 
 # Grafico del promedio 
-ax[0].errorbar(time_sonido_RoNe_noche, average_RoNe_noche_sonido, std_RoNe_noche_sonido, color='C0')
-ax[1].errorbar(time_maximos_RoNe_noche, average_RoNe_noche_presion, std_RoNe_noche_presion, color='C0')
-ax[2].errorbar(time_rate_RoNe_noche, average_RoNe_noche_rate, std_RoNe_noche_rate, color='C0')
+ax[0].errorbar(time_sonido_RoNe_noche, average_RoNe_noche_sonido, std_RoNe_noche_sonido, color= 'royalblue')
+ax[1].errorbar(time_maximos_RoNe_noche, average_RoNe_noche_presion, std_RoNe_noche_presion, color= 'royalblue')
+ax[2].errorbar(time_rate_RoNe_noche, average_RoNe_noche_rate, std_RoNe_noche_rate, color= 'royalblue')
+
+ax[0].set_ylim([0,10])
+ax[1].set_ylim([0,4])
+ax[2].set_ylim([0.5,4])
 
 legend_handles = [
-    mpatches.Patch(color='C0', label='Average'),
-    mpatches.Patch(color='k', label='Data'),
+    mpatches.Patch(color= 'C0', label='Promedio'),
+    mpatches.Patch(color='k', label='Datos'),
 ]
-ax[0].legend(handles=legend_handles, fancybox=True, shadow=True,loc='upper right')
-ax[1].legend(handles=legend_handles, fancybox=True, shadow=True,loc='upper right')
-ax[2].legend(handles=legend_handles, fancybox=True, shadow=True,loc='upper right')
+ax[0].legend(handles=legend_handles, fancybox=True, shadow=True,loc='upper left',fontsize=12,prop={'size': 24})
+# ax[1].legend(handles=legend_handles, fancybox=True, shadow=True,loc='upper right')
+# ax[2].legend(handles=legend_handles, fancybox=True, shadow=True,loc='upper right')
+directory = r'C:\Users\beneg\OneDrive\Escritorio\Tesis\Datos\Datos Fran\Poster'
+os.chdir(directory)  # Change the working directory to the specified path
 
+# plt.savefig('promedio_noche.png')
+
+#%%
+
+# np.savetxt('average RoNe rate', np.array([time_rate_RoNe_noche, average_RoNe_noche_rate, std_RoNe_noche_rate]),delimiter=',')
 #%%  Grafico de los 3 regiones de interes
 
 fig, ax = plt.subplots(3,1,figsize=(14,7),sharex=True)
-ax[0].set_ylabel("Audio (arb. u.)")
-ax[1].set_ylabel("Pressure (arb. u.)")
-ax[2].set_ylabel("Rate (Hz)")
-ax[2].set_xlabel("Time (s)")
+ax[0].set_ylabel("Audio (arb. u.)", fontsize=14)
+ax[1].set_ylabel("Pressure (arb. u.)", fontsize=14)
+ax[2].set_ylabel("Rate (Hz)", fontsize=14)
+ax[2].set_xlabel("Time (s)", fontsize=14)
 plt.tight_layout()
 
 # Find the index at time 0
@@ -295,12 +349,29 @@ actual_closest_index = np.arange(len(average_RoNe_noche_sonido))[excluded_indice
 # Get the time at that index
 time_at_value = time_sonido_RoNe_noche[actual_closest_index]
 
+# Find the index in time_maximos_RoNe_noche closest to time_at_value (for pressure)
+index_at_value_presion = (np.abs(time_maximos_RoNe_noche - time_at_value)).argmin()
+value_at_time_presion = average_RoNe_noche_presion[index_at_value_presion]
+
+index_at_value_presion_0 = (np.abs(time_maximos_RoNe_noche - 0)).argmin()
+value_at_time_presion_0 = average_RoNe_noche_presion[index_at_value_presion_0]
+
+# Find the index in time_rate_RoNe_noche closest to time_at_value (for rate)
+index_at_value_rate = (np.abs(time_rate_RoNe_noche - time_at_value)).argmin()
+value_at_time_rate = average_RoNe_noche_rate[index_at_value_rate]
+
+
+index_at_value_rate_0 = (np.abs(time_rate_RoNe_noche - 0)).argmin()
+value_at_time_rate_0 = average_RoNe_noche_rate[index_at_value_rate_0]
+
 # Plot for ax[0] with time_sonido_RoNe
 ax[0].axvspan(time_sonido_RoNe_noche[0], 0, facecolor='g', alpha=0.3,edgecolor='k',linestyle='--',label='Before')
 ax[0].axvspan(0, time_at_value, facecolor='b', alpha=0.3,edgecolor='k',linestyle='--',label='During')
 ax[0].axvspan(time_at_value, time_sonido_RoNe_noche[-1], facecolor='r', alpha=0.3,edgecolor='k',linestyle='--',label='After')
 ax[0].errorbar(time_sonido_RoNe_noche, average_RoNe_noche_sonido, std_RoNe_noche_sonido, color='C0')
+ax[0].text(20,3, f"{round(time_at_value,2)}s" , fontsize=12, bbox=dict(facecolor='k', alpha=0.1))
 ax[0].legend(fancybox=True,shadow=True)
+# ax[0].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
 
 
 # Plot for ax[1] with time_maximos_RoNe
@@ -308,7 +379,10 @@ ax[1].axvspan(time_sonido_RoNe_noche[0], 0, facecolor='g', alpha=0.3,edgecolor='
 ax[1].axvspan(0, time_at_value, facecolor='b', alpha=0.3,edgecolor='k',linestyle='--',label='During')
 ax[1].axvspan(time_at_value, time_sonido_RoNe_noche[-1], facecolor='r', alpha=0.3,edgecolor='k',linestyle='--',label='After')
 ax[1].errorbar(time_maximos_RoNe_noche, average_RoNe_noche_presion, std_RoNe_noche_presion, color='C0')
+# ax[1].text(-5,3, round(value_at_time_presion_0,2) , fontsize=12, bbox=dict(facecolor='k', alpha=0.5))
+ax[1].text(20,3, f"{round(100*(value_at_time_presion-value_at_time_presion_0)/value_at_time_presion_0,2)}%" , fontsize=12, bbox=dict(facecolor='k', alpha=0.1))
 ax[1].legend(fancybox=True,shadow=True)
+# ax[1].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
 
 
 # Plot for ax[2] with time_rate_RoNe
@@ -316,8 +390,11 @@ ax[2].axvspan(time_sonido_RoNe_noche[0], 0, facecolor='g', alpha=0.3,edgecolor='
 ax[2].axvspan(0, time_at_value, facecolor='b', alpha=0.3,edgecolor='k',linestyle='--',label='During')
 ax[2].axvspan(time_at_value, time_sonido_RoNe_noche[-1], facecolor='r', alpha=0.3,edgecolor='k',linestyle='--',label='After')
 ax[2].errorbar(time_rate_RoNe_noche, average_RoNe_noche_rate, std_RoNe_noche_rate, color='C0')
-ax[2].legend(fancybox=True,shadow=True)
+ax[2].text(20,2, f"{round(100*(value_at_time_rate-value_at_time_rate_0)/value_at_time_rate_0,2)}%" , fontsize=12, bbox=dict(facecolor='k', alpha=0.1))
 
+ax[2].legend(fancybox=True,shadow=True)
+# ax[2].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[2].xaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
 
 #%% Quiero ver durante el dia aca
 
@@ -373,12 +450,12 @@ notification.notify(
 )
 
 
-#%%
+#%% Graficos de todos los plots del dia supuerpuestos 
 fig, ax = plt.subplots(3, 1, figsize=(14, 7), sharex=True)
-ax[0].set_ylabel("Audio (arb. u.)")
-ax[1].set_ylabel("Pressure (arb. u.)")
-ax[2].set_ylabel("Rate (Hz)")
-ax[2].set_xlabel("Time (s)")
+ax[0].set_ylabel("Audio (arb. u.)", fontsize=14)
+ax[1].set_ylabel("Pressure (arb. u.)", fontsize=14)
+ax[2].set_ylabel("Rate (Hz)", fontsize=14)
+ax[2].set_xlabel("Time (s)", fontsize=14)
 plt.tight_layout()
 
 for i in range(len(RoNe_dia)):
@@ -397,6 +474,11 @@ ax[0].errorbar(time_sonido_RoNe_dia, average_RoNe_dia_sonido, yerr=std_RoNe_dia_
 ax[1].errorbar(time_maximos_RoNe_dia, average_RoNe_dia_presion, yerr=std_RoNe_dia_presion, color='C0') 
 ax[2].errorbar(time_rate_RoNe_dia, average_RoNe_dia_rate, yerr=std_RoNe_dia_rate, color='C0') 
 
+# ax[0].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[1].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[2].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[2].xaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+
 legend_handles = [
     mpatches.Patch(color='C0', label='Average'),
     mpatches.Patch(color='k', label='Data'),
@@ -405,22 +487,27 @@ ax[0].legend(handles=legend_handles, fancybox=True, shadow=True,loc='upper right
 ax[1].legend(handles=legend_handles, fancybox=True, shadow=True,loc='upper right')
 ax[2].legend(handles=legend_handles, fancybox=True, shadow=True,loc='upper right')
 
-#%%
+#%% Grafico de comparacion del dia y la noche
 fig, ax = plt.subplots(3, 1, figsize=(14, 7), sharex=True)
-ax[0].set_ylabel("Audio (arb. u.)")
-ax[1].set_ylabel("Pressure (arb. u.)")
-ax[2].set_ylabel("Rate (Hz)")
-ax[2].set_xlabel("Time (s)")
+ax[0].set_ylabel("Audio (arb. u.)", fontsize=14)
+ax[1].set_ylabel("Pressure (arb. u.)", fontsize=14)
+ax[2].set_ylabel("Rate (Hz)", fontsize=14)
+ax[2].set_xlabel("Time (s)", fontsize=14)
 plt.tight_layout()
 
 ## Noche
 ax[0].errorbar(time_sonido_RoNe_noche, average_RoNe_noche_sonido, std_RoNe_noche_sonido, color='C0', label='Noche')
 ax[1].errorbar(time_maximos_RoNe_noche, average_RoNe_noche_presion, std_RoNe_noche_presion, color='C0', label='Noche')
-ax[2].errorbar(time_rate_RoNe_noche, average_RoNe_noche_rate, std_RoNe_noche_rate, color='C0', label='Noche')
+ax[2].errorbar(time_rate_RoNe_noche, average_RoNe_noche_rate/np.mean(average_RoNe_noche_rate[0:100]), std_RoNe_noche_rate, color='C0', label='Noche')
 ## Dia
 ax[0].errorbar(time_sonido_RoNe_dia, average_RoNe_dia_sonido, yerr=std_RoNe_dia_sonido, color='C2', label='Dia')    
-ax[1].errorbar(time_maximos_RoNe_dia, average_RoNe_dia_presion, yerr=std_RoNe_dia_presion, color='C2', label='Dia') 
-ax[2].errorbar(time_rate_RoNe_dia, average_RoNe_dia_rate, yerr=std_RoNe_dia_rate, color='C2', label='Dia') 
+ax[1].errorbar(time_maximos_RoNe_dia, average_RoNe_dia_presion/np.mean(average_RoNe_dia_presion[0:100]), yerr=std_RoNe_dia_presion, color='C2', label='Dia') 
+ax[2].errorbar(time_rate_RoNe_dia, average_RoNe_dia_rate/np.mean(average_RoNe_dia_rate[0:100]), yerr=std_RoNe_dia_rate, color='C2', label='Dia') 
+
+# ax[0].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[1].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[2].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[2].xaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
 
 ax[0].legend(fancybox=True,shadow=True)
 ax[1].legend(fancybox=True,shadow=True)
@@ -448,10 +535,10 @@ for i in range(len(time_rate_RoNe_dia)):
 # Convert p-values list to a numpy array if needed
 p_values_rate = np.array(p_values_rate)
 
-fig, ax = plt.subplots(2,1,figsize=(14,7))
-ax[0].set_ylabel(r"Rate (arb. u.)")
-ax[1].set_ylabel(r"P-value")
-ax[1].set_xlabel(r"Time (s)")
+fig, ax = plt.subplots(2,1,figsize=(14,7),sharex=True)
+ax[0].set_ylabel(r"Rate (arb. u.)", fontsize=14)
+ax[1].set_ylabel(r"P-value", fontsize=14)
+ax[1].set_xlabel(r"Time (s)", fontsize=14)
 plt.tight_layout()
 
 ax[0].errorbar(time_rate_RoNe_dia, average_RoNe_dia_rate/np.mean(average_RoNe_dia_rate[0:100]), yerr= std_RoNe_dia_rate, color='C0', label='Dia') 
@@ -459,6 +546,32 @@ ax[0].errorbar(time_rate_RoNe_dia,rate_interpolated_rate_noche_cortado/np.nanmea
 ax[1].plot(time_rate_RoNe_dia,p_values_rate)
 ax[0].legend(fancybox=True,shadow=True)
 
+# ax[0].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[1].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[1].xaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+fig, ax = plt.subplots(2,1,figsize=(15,10),sharex=True)
+ax[0].set_ylabel("Presion (u. a.)", fontsize=15)
+ax[1].set_ylabel("Rate (Hz)", fontsize=15)
+ax[1].set_xlabel("Tiempo (s)", fontsize=15)
+ax[0].tick_params(axis='both', labelsize=13)
+ax[1].tick_params(axis='both', labelsize=13)
+
+ax[1].errorbar(time_rate_RoNe_dia, average_RoNe_dia_rate/np.mean(average_RoNe_dia_rate[0:indice_rate]), yerr= std_RoNe_dia_rate, color=colors[0]) 
+ax[1].errorbar(time_rate_RoNe_dia,rate_interpolated_rate_noche_cortado/np.nanmean(rate_interpolated_rate_noche_cortado[0:indice_rate]), yerr=rate_std_interpolated_rate_noche_cortado,color='royalblue')
+# ax[1].errorbar(time_rate_RoNe_basal, average_RoNe_basal_rate/np.mean(average_RoNe_basal_rate[0:indice_rate]), yerr= std_RoNe_basal_rate, color=colors[1], label='Basal') 
+ax[0].errorbar(time_maximos_RoNe_dia, average_RoNe_dia_presion/np.mean(average_RoNe_dia_presion[0:indice_maximos]),yerr= std_RoNe_dia_presion, color=colors[0], label='Dia')
+ax[0].errorbar(time_maximos_RoNe_dia,presion_interpolated_presion_noche_cortado/np.nanmean(presion_interpolated_presion_noche_cortado[0:indice_maximos]), yerr=presion_std_interpolated_presion_noche_cortado,color='royalblue', label='Noche')
+# ax[0].errorbar(time_maximos_RoNe_basal, average_RoNe_basal_presion/np.mean(average_RoNe_basal_presion[0:indice_maximos]), yerr= std_RoNe_basal_presion, color=colors[1], label='Basal')
+ax[1].axvspan(1.58,22.22,color='#b35f9f',alpha=0.3, edgecolor='k', linestyle='--')
+ax[0].axvspan(1.34,20.5, facecolor='#B35F9F',alpha=0.3, edgecolor='k', linestyle='--',label= 'P-value < 0.05')
+# ax[3].plot(time_rate_RoNe_dia, p_values_rate)
+# ax[2].plot(time_maximos_RoNe_dia, p_values_presion)
+ax[1].set_xlim(-23,29)
+# plt.tight_layout()
+# ax[0].legend(fancybox=True,shadow=True,loc='upper left')
+# ax[1].legend(fancybox=True,shadow=True,loc='upper left')
+fig.legend(loc='upper center', bbox_to_anchor=(0.5, 0.951), bbox_transform=fig.transFigure, ncol=3, fontsize=12)
+# plt.savefig('Noche vs dia vs basal.pdf')
 #%% Aca interpolo los datos de la presion de la noche sobre los tiempos del dia
 # Interpolating the presion data to the time base of the day
 interpolated_presion_on_day_base = interpolate_to_target_time_base(
@@ -482,10 +595,10 @@ for i in range(len(time_maximos_RoNe_dia)):
 p_values_presion = np.array(p_values_presion)
 
 # Plotting the results
-fig, ax = plt.subplots(2, 1, figsize=(14, 7))
-ax[0].set_ylabel(r"Pressure (arb. u.)")
-ax[1].set_ylabel(r"P-value")
-ax[1].set_xlabel(r"Time (s)")
+fig, ax = plt.subplots(2, 1, figsize=(14, 7),sharex=True)
+ax[0].set_ylabel(r"Pressure (arb. u.)", fontsize=14)
+ax[1].set_ylabel(r"P-value", fontsize=14)
+ax[1].set_xlabel(r"Time (s)", fontsize=14)
 plt.tight_layout()
 
 # Plot the interpolated presion data for day and night with error bars
@@ -499,6 +612,10 @@ ax[1].plot(time_maximos_RoNe_dia, p_values_presion)
 
 # Add legend
 ax[0].legend(fancybox=True, shadow=True)
+
+# ax[0].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[1].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[1].xaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
 
 #%% Aca importo RoVio para ver si puedo calcular el p-value entre ambos
 
@@ -556,10 +673,10 @@ average_RoVio_noche_rate, std_RoVio_noche_rate, _ = compute_average_and_std(inte
 
 #%%
 fig, ax = plt.subplots(3, 1, figsize=(14, 7), sharex=True)
-ax[0].set_ylabel("Audio (arb. u.)")
-ax[1].set_ylabel("Pressure (arb. u.)")
-ax[2].set_ylabel("Rate (Hz)")
-ax[2].set_xlabel("Time (s)")
+ax[0].set_ylabel("Audio (arb. u.)", fontsize=14)
+ax[1].set_ylabel("Pressure (arb. u.)", fontsize=14)
+ax[2].set_ylabel("Rate (Hz)", fontsize=14)
+ax[2].set_xlabel("Time (s)", fontsize=14)
 plt.tight_layout()
 ax[0].errorbar(time_sonido_RoVio_noche, average_RoVio_noche_sonido, std_RoVio_noche_sonido, color='C0', label='Noche')
 ax[1].errorbar(time_maximos_RoVio_noche, average_RoVio_noche_presion, std_RoVio_noche_presion, color='C0', label='Noche')
@@ -584,17 +701,19 @@ for i in range(len(time_rate_RoNe_noche)):
 # Convert p-values list to a numpy array if needed
 p_values_rate = np.array(p_values_rate)
 
-fig, ax = plt.subplots(2,1,figsize=(14,7))
-ax[0].set_ylabel(r"Rate (arb. u.)")
-ax[1].set_ylabel(r"P-value")
-ax[1].set_xlabel(r"Time (s)")
+fig, ax = plt.subplots(2,1,figsize=(14,7),sharex=True)
+ax[0].set_ylabel(r"Rate (arb. u.)", fontsize=14)
+ax[1].set_ylabel(r"P-value", fontsize=14)
+ax[1].set_xlabel(r"Time (s)", fontsize=14)
 plt.tight_layout()
 
-ax[0].errorbar(time_rate_RoNe_noche, average_RoNe_noche_rate/np.mean(average_RoNe_noche_rate[0:100]), yerr= std_RoNe_noche_rate, color='C0', label='Dia') 
-ax[0].errorbar(time_rate_RoNe_noche,rate_interpolated_rate_noche_cortado/np.nanmean(rate_interpolated_rate_noche_cortado[0:100]), yerr=rate_std_interpolated_rate_noche_cortado,color='C2', label='Noche')
-ax[1].plot(time_rate_RoNe_dia,p_values_rate)
+ax[0].errorbar(time_rate_RoNe_noche, average_RoNe_noche_rate/np.mean(average_RoNe_noche_rate[0:100]), yerr= std_RoNe_noche_rate, color='C0', label='RoNe') 
+ax[0].errorbar(time_rate_RoNe_noche,rate_interpolated_rate_noche_cortado/np.nanmean(rate_interpolated_rate_noche_cortado[0:100]), yerr=rate_std_interpolated_rate_noche_cortado,color='C2', label='RoVio')
+ax[1].plot(time_rate_RoNe_noche,p_values_rate)
 ax[0].legend(fancybox=True,shadow=True)
 
-
+# ax[0].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[1].yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
+# ax[1].xaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: r"$%g$" % val))
 
 
